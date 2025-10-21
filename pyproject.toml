@@ -1,0 +1,26 @@
+[project]
+name = "bdfinance"
+version = "0.1.0"
+description = "High-performance async Bangladesh stock market data library with batch processing"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx[http2]",
+    "beautifulsoup4",
+    "lxml",
+    "pandas",
+    "pydantic",
+    "pydantic-settings",
+    "tenacity",
+    "structlog",
+    "aiocache",
+    "msgpack",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+]
+
+
