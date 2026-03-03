@@ -21,10 +21,10 @@ logger = structlog.get_logger()
 class AsyncHTTPClient:
     """Async HTTP client with connection pooling, retries, and rate limiting"""
 
-    def __init__(self, config: ClientConfig) -> None:
-        self.config = config
+    def __init__(self, config: ClientConfig | None = None) -> None:
+        self.config = config or ClientConfig()
         self._client: httpx.AsyncClient | None = None
-        self._semaphore = asyncio.Semaphore(config.rate_limit)
+        self._semaphore = asyncio.Semaphore(self.config.rate_limit)
         self._base_headers = {
             "User-Agent": constants.USER_AGENT,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",

@@ -6,8 +6,9 @@ from typing import Literal
 
 import pandas as pd
 import structlog
-
+from thefuzz import fuzz
 from bdfinance import constants
+import re
 from bdfinance.models.market import MarketDepth, TBondInfo
 from bdfinance.repositories.base import BaseRepository, RequestPayload
 from bdfinance.utils.data_cleaners import compute_approx_ytm, extract_tenor_from_symbol
@@ -20,13 +21,15 @@ logger = structlog.get_logger()
 class MarketRepository(BaseRepository):
     """Repository for market data operations"""
 
-    async def get_company_summary(self, name: str) -> str | None:
+    async def get_company_summary(self, symbol: str, company_name: str) -> str | None:
         """Get company summary by name"""
         # Check cache
         if self.cache:
-            cached = await self.cache.get("company_summary", name=name)
+            cached = await self.cache.get("company_summary", name=company_name)
             if cached:
                 return cached
+        
+        name = company_name
 
         params = {
             "prop": "extracts|info",
@@ -41,7 +44,7 @@ class MarketRepository(BaseRepository):
         qparams = {
             "list": "search",
             "srsearch": name,
-            "srlimit": 1,
+            "srlimit": 10,
             "srnamespace": 0,
             "srprop": "snippet|titlesnippet|size|wordcount|timestamp",
             "format": "json",
@@ -52,7 +55,19 @@ class MarketRepository(BaseRepository):
         res = await self.http.get(constants.WIKIPEDIA_API_URL, params=qparams)
         r = res.json()
         data = r.get("query", {}).get("search", [])
-        title = data[0]["title"] if data else name
+        title = data[0]["title"] if data else company_name
+        match_score = 0
+        for item in data:
+            snippet = item.get("snippet", "").lower()
+            tt = item.get("title", "").lower()
+            snippet = re.sub(r"<.*?>", "", snippet)
+            cml = company_name.lower()
+            sml = symbol.lower()
+            score = fuzz.ratio(cml, snippet) + fuzz.partial_ratio(cml, tt) + fuzz.ratio(sml, snippet) + fuzz.partial_ratio(sml, tt)
+            if score > match_score:
+                match_score = score
+                title = item.get("title", company_name)
+        
 
         params["titles"] = title
         res = await self.http.get(constants.WIKIPEDIA_API_URL, params=params)
@@ -63,12 +78,12 @@ class MarketRepository(BaseRepository):
         summary = page_data.get("extract", "")
 
         if not summary:
-            logger.warning("No summary found", name=name, title=title)
+            logger.warning("No summary found", name=company_name, title=title)
             return None
 
         if self.cache and summary:
             await self.cache.set(
-                "company_summary", summary, name=name, ttl=86400
+                "company_summary", summary, name=company_name, ttl=86400
             )  # 1 day
 
         return summary
