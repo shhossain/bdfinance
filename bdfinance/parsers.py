@@ -543,3 +543,32 @@ class HTMLParser:
     @staticmethod
     def parse_top_10(html: str):
         return HTMLParser.parse_price_table(html)
+
+    @staticmethod
+    def parse_tbond_info(html: str) -> dict[str, str]:
+        """
+        Parse treasury bond detail page to extract bond metadata.
+
+        Extracts key-value pairs from th-td table rows such as
+        Coupon Rate, Issue Date, Maturity Date, etc.
+
+        Args:
+            html: Raw HTML of the bond info page
+
+        Returns:
+            Dict of bond metadata fields
+        """
+        soup = BeautifulSoup(html, "lxml")
+        info: dict[str, str] = {}
+
+        for table in soup.find_all("table"):
+            for row in table.find_all("tr"):
+                cells = row.find_all(["th", "td"])
+                # Process pairs: (cells[0],cells[1]), (cells[2],cells[3]), ...
+                for j in range(0, len(cells) - 1, 2):
+                    key = cells[j].get_text(strip=True)
+                    val = cells[j + 1].get_text(strip=True)
+                    if key and val:
+                        info[key] = val
+
+        return info

@@ -1,17 +1,16 @@
 """Market data repository with async methods"""
 
 import asyncio
-import re
 from datetime import datetime
 from typing import Literal
 
 import pandas as pd
 import structlog
-from bs4 import BeautifulSoup
 
 from bdfinance import constants
 from bdfinance.models.market import MarketDepth, TBondInfo
 from bdfinance.repositories.base import BaseRepository, RequestPayload
+from bdfinance.utils.data_cleaners import compute_approx_ytm, extract_tenor_from_symbol
 from bdfinance.utils.date_helper import convert_to_start_end_date
 from bdfinance.utils.parse_com_info import DSECompanyData
 
@@ -335,20 +334,7 @@ class MarketRepository(BaseRepository):
                     constants.DSE_COMPANY_INFO_URL,
                     params={"name": symbol},
                 )
-                html = response.text
-                soup = BeautifulSoup(html, "lxml")
-
-                # Extract th-td pairs (rows can have 2 or 4 columns)
-                info: dict[str, str] = {}
-                for table in soup.find_all("table"):
-                    for row in table.find_all("tr"):
-                        cells = row.find_all(["th", "td"])
-                        # Process pairs: (cells[0],cells[1]), (cells[2],cells[3]), ...
-                        for j in range(0, len(cells) - 1, 2):
-                            key = cells[j].get_text(strip=True)
-                            val = cells[j + 1].get_text(strip=True)
-                            if key and val:
-                                info[key] = val
+                info = self.parser.parse_tbond_info(response.text)
 
                 coupon_str = info.get("Coupon Rate", "")
                 issue_str = info.get("Issue Date", "")
@@ -364,43 +350,18 @@ class MarketRepository(BaseRepository):
                 face = float(face_str.replace(",", "")) if face_str else 100.0
                 close = close_data.get(symbol, 0.0)
 
-                # Determine tenor from symbol
-                bond_tenor = "10Y"  # default
-                for t in ["20Y", "15Y", "10Y", "5Y", "2Y"]:
-                    if f"TB{t}" in symbol:
-                        bond_tenor = t
-                        break
-
-                # Compute approximate YTM if we have price and maturity
-                approx_ytm = None
-                if close > 0 and maturity_str:
-                    try:
-                        from dateutil.parser import parse as dateutil_parse
-
-                        mat_dt = dateutil_parse(maturity_str)
-                        years_to_mat = (mat_dt - datetime.now()).days / 365.25
-                        if years_to_mat > 0:
-                            # Approximate YTM formula:
-                            # YTM ≈ (C + (F-P)/n) / ((F+P)/2)
-                            approx_ytm = round(
-                                (coupon + (face - close) / years_to_mat)
-                                / ((face + close) / 2)
-                                * 100,
-                                2,
-                            )
-                    except (ValueError, TypeError):
-                        pass
-
                 bond = TBondInfo(
                     symbol=symbol,
-                    tenor=bond_tenor,
+                    tenor=extract_tenor_from_symbol(symbol),
                     coupon_rate=coupon,
                     coupon_frequency=frequency,
                     face_value=face,
                     issue_date=issue_str if issue_str else None,
                     maturity_date=maturity_str if maturity_str else None,
                     close_price=close,
-                    approx_ytm=approx_ytm,
+                    approx_ytm=compute_approx_ytm(
+                        coupon, face, close, maturity_str
+                    ),
                 )
 
                 if self.cache:
@@ -424,12 +385,11 @@ class MarketRepository(BaseRepository):
         # Sort by issue date descending (newest first)
         def _issue_sort_key(b: TBondInfo) -> str:
             if b.issue_date:
-                try:
-                    from dateutil.parser import parse as dateutil_parse
+                from bdfinance.utils.parse_com_info import parse_date
 
-                    return dateutil_parse(b.issue_date).isoformat()
-                except (ValueError, TypeError):
-                    pass
+                dt = parse_date(b.issue_date)
+                if dt:
+                    return dt.isoformat()
             return ""
 
         bonds.sort(key=_issue_sort_key, reverse=True)

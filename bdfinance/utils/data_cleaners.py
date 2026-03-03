@@ -190,3 +190,58 @@ def parse_market_value(value: Any) -> float:
         return num * 10  # 1 crore = 10 million
     else:
         return num
+
+
+def extract_tenor_from_symbol(symbol: str) -> str:
+    """
+    Extract bond tenor from a treasury bond symbol.
+
+    Args:
+        symbol: Bond trading symbol (e.g. 'TB10Y0634')
+
+    Returns:
+        Tenor string like '10Y', '5Y', '2Y', '15Y', '20Y', or '10Y' as default
+    """
+    for t in ["20Y", "15Y", "10Y", "5Y", "2Y"]:
+        if f"TB{t}" in symbol:
+            return t
+    return "10Y"
+
+
+def compute_approx_ytm(
+    coupon: float,
+    face: float,
+    price: float,
+    maturity_date_str: str,
+) -> float | None:
+    """
+    Compute approximate yield-to-maturity for a bond.
+
+    Uses the approximation formula:
+        YTM ≈ (C + (F - P) / n) / ((F + P) / 2) × 100
+
+    Args:
+        coupon: Annual coupon rate (in currency units, not percent)
+        face: Face/par value
+        price: Current market price
+        maturity_date_str: Maturity date as a string (parseable by dateutil)
+
+    Returns:
+        Approximate YTM as a percentage, or None if not computable
+    """
+    if price <= 0 or not maturity_date_str:
+        return None
+
+    try:
+        from dateutil.parser import parse as dateutil_parse
+
+        mat_dt = dateutil_parse(maturity_date_str)
+        years_to_mat = (mat_dt - datetime.now()).days / 365.25
+        if years_to_mat <= 0:
+            return None
+        return round(
+            (coupon + (face - price) / years_to_mat) / ((face + price) / 2) * 100,
+            2,
+        )
+    except (ValueError, TypeError):
+        return None
