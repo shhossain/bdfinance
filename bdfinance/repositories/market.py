@@ -338,14 +338,15 @@ class MarketRepository(BaseRepository):
                 html = response.text
                 soup = BeautifulSoup(html, "lxml")
 
-                # Extract th-td pairs
+                # Extract th-td pairs (rows can have 2 or 4 columns)
                 info: dict[str, str] = {}
                 for table in soup.find_all("table"):
                     for row in table.find_all("tr"):
                         cells = row.find_all(["th", "td"])
-                        if len(cells) >= 2:
-                            key = cells[0].get_text(strip=True)
-                            val = cells[1].get_text(strip=True)
+                        # Process pairs: (cells[0],cells[1]), (cells[2],cells[3]), ...
+                        for j in range(0, len(cells) - 1, 2):
+                            key = cells[j].get_text(strip=True)
+                            val = cells[j + 1].get_text(strip=True)
                             if key and val:
                                 info[key] = val
 
