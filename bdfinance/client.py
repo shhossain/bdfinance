@@ -108,6 +108,7 @@ class BDStockClient(BaseClient):
             http_client=self._http_client,
             cache_manager=self._cache_manager,
         )
+    
 
     def tickers(self, symbols: list[str] | str) -> dict[str, Ticker]:
         """

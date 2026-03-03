@@ -5,7 +5,7 @@ related to a specific stock symbol.
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 import pandas as pd
 from bdfinance.cache import CacheManager
@@ -77,11 +77,21 @@ class Ticker:
         """
         return await self._trading_repo.get_quote(symbol=self.symbol)
 
+    async def validate_symbol(self) -> bool:
+        """
+        Validate if the symbol exists in DSE
+
+        Returns:
+            True if valid, False otherwise
+        """
+        quote = await self.quote()
+        return quote is not None
+
     async def history(
         self,
         start: str | datetime | None = None,
         end: str | datetime | None = None,
-        period: str | None = None,
+        period: str | timedelta | None = None,
     ) -> pd.DataFrame:
         """
         Get historical trading data for this symbol

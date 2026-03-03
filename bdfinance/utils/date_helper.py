@@ -20,12 +20,16 @@ def period_parsing(period: str) -> timedelta:
 def convert_to_start_end_date(
     start: str | None | datetime,
     end: str | None | datetime,
-    period: str | None = None,
+    period: str | timedelta | None = None,
     default_period: str = "30d",
     format: str = "%Y-%m-%d",
 ) -> tuple[str, str]:
     end_date = datetime.now()
     if period:
+        if isinstance(period, timedelta):
+            delta = period
+        else:
+            delta = period_parsing(period)
         delta = period_parsing(period)
     else:
         delta = period_parsing(default_period)

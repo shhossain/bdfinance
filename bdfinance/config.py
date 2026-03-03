@@ -28,6 +28,11 @@ class ClientConfig(BaseSettings):
     # Cache
     enable_cache: bool = Field(default=True, description="Enable response caching")
 
+    # Proxy settings
+    proxy_url: str | None = Field(default=None, description="Proxy URL (e.g. http://proxyserver:port)")
+    proxy_username: str | None = Field(default=None, description="Proxy username")
+    proxy_password: str | None = Field(default=None, description="Proxy password")
+
     # URLs
     dse_url: str = Field(default="https://dsebd.org/", description="DSE primary URL")
     dse_alt_url: str = Field(default="https://dsebd.com.bd/", description="DSE alternate URL")

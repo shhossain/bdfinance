@@ -81,3 +81,19 @@ class MarketDepth(BaseModel):
 
 class CompanyInfo(BaseModel):
     data: dict = Field(description="Company information data")
+
+
+class TBondInfo(BaseModel):
+    """Treasury Bond information"""
+
+    symbol: str = Field(description="Trading symbol (e.g. TB10Y0634)")
+    tenor: str = Field(description="Bond tenor (e.g. '10Y', '5Y', '2Y', '15Y', '20Y')")
+    coupon_rate: float = Field(description="Coupon rate in percent")
+    coupon_frequency: int = Field(default=2, description="Coupon payments per year")
+    face_value: float = Field(default=100.0, description="Face/par value")
+    issue_date: str | None = Field(default=None, description="Issue date")
+    maturity_date: str | None = Field(default=None, description="Maturity date")
+    close_price: float = Field(default=0.0, description="Last close price")
+    approx_ytm: float | None = Field(
+        default=None, description="Approximate yield to maturity in percent"
+    )

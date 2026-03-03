@@ -4,7 +4,7 @@ bdfinance - High-performance async Bangladesh stock market data library
 
 from bdfinance.client import BDStockClient
 from bdfinance.config import CacheConfig, ClientConfig
-from bdfinance.models.market import CompanyInfo, MarketDepth, MarketInfo
+from bdfinance.models.market import CompanyInfo, MarketDepth, MarketInfo, TBondInfo
 from bdfinance.models.news import AGMNews, News
 from bdfinance.models.trading import CurrentTradeData
 from bdfinance.ticker import Ticker
@@ -20,6 +20,7 @@ __all__ = [
     "MarketInfo",
     "CompanyInfo",
     "MarketDepth",
+    "TBondInfo",
     "AGMNews",
     "News",
 ]

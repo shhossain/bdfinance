@@ -1,13 +1,16 @@
 """Market data repository with async methods"""
 
 import asyncio
+import re
 from datetime import datetime
 from typing import Literal
+
 import pandas as pd
 import structlog
+from bs4 import BeautifulSoup
 
 from bdfinance import constants
-from bdfinance.models.market import MarketDepth
+from bdfinance.models.market import MarketDepth, TBondInfo
 from bdfinance.repositories.base import BaseRepository, RequestPayload
 from bdfinance.utils.date_helper import convert_to_start_end_date
 from bdfinance.utils.parse_com_info import DSECompanyData
@@ -280,3 +283,154 @@ class MarketRepository(BaseRepository):
     async def get_top_10_gainers(self) -> pd.DataFrame:
         """Get top 10 gainers"""
         return await self.get_top_10(type="gainers")
+
+    async def get_tbond_yields(
+        self,
+        tenor: str = "10Y",
+    ) -> list[TBondInfo]:
+        """
+        Get treasury bond information including coupon rates and approximate YTM.
+
+        Fetches G-SEC (T.Bond) sector data from DSE, then scrapes individual
+        bond pages for coupon rate, issue date, and maturity date. Computes
+        approximate yield-to-maturity (YTM) for bonds with market prices.
+
+        Args:
+            tenor: Bond tenor filter - '2Y', '5Y', '10Y', '15Y', '20Y', or 'all'
+
+        Returns:
+            List of TBondInfo objects sorted by issue date (newest first)
+        """
+        # Step 1: Get all G-SEC symbols with close prices
+        sector_df = await self.get_latest_share_price_by_sector("G-SEC (T.Bond)")
+        if sector_df.empty:
+            logger.warning("No G-SEC data available")
+            return []
+
+        symbols = sector_df["Symbol"].tolist()
+        close_data = dict(zip(sector_df["Symbol"], sector_df["Close"]))
+
+        # Filter by tenor prefix
+        if tenor != "all":
+            prefix = f"TB{tenor}"
+            symbols = [s for s in symbols if s.startswith(prefix)]
+
+        if not symbols:
+            logger.warning("No bonds found for tenor", tenor=tenor)
+            return []
+
+        # Step 2: Scrape bond details from individual pages
+        bonds: list[TBondInfo] = []
+
+        async def _scrape_bond(symbol: str) -> TBondInfo | None:
+            try:
+                cache_key = f"tbond_info_{symbol}"
+                cached = None
+                if self.cache:
+                    cached = await self.cache.get(cache_key)
+                if cached:
+                    return cached
+
+                response = await self.http.get(
+                    constants.DSE_COMPANY_INFO_URL,
+                    params={"name": symbol},
+                )
+                html = response.text
+                soup = BeautifulSoup(html, "lxml")
+
+                # Extract th-td pairs
+                info: dict[str, str] = {}
+                for table in soup.find_all("table"):
+                    for row in table.find_all("tr"):
+                        cells = row.find_all(["th", "td"])
+                        if len(cells) >= 2:
+                            key = cells[0].get_text(strip=True)
+                            val = cells[1].get_text(strip=True)
+                            if key and val:
+                                info[key] = val
+
+                coupon_str = info.get("Coupon Rate", "")
+                issue_str = info.get("Issue Date", "")
+                maturity_str = info.get("Maturity Date", "")
+                freq_str = info.get("Coupon Frequency", "2")
+                face_str = info.get("Face/par Value", "100")
+
+                if not coupon_str:
+                    return None
+
+                coupon = float(coupon_str)
+                frequency = int(freq_str) if freq_str.isdigit() else 2
+                face = float(face_str.replace(",", "")) if face_str else 100.0
+                close = close_data.get(symbol, 0.0)
+
+                # Determine tenor from symbol
+                bond_tenor = "10Y"  # default
+                for t in ["20Y", "15Y", "10Y", "5Y", "2Y"]:
+                    if f"TB{t}" in symbol:
+                        bond_tenor = t
+                        break
+
+                # Compute approximate YTM if we have price and maturity
+                approx_ytm = None
+                if close > 0 and maturity_str:
+                    try:
+                        from dateutil.parser import parse as dateutil_parse
+
+                        mat_dt = dateutil_parse(maturity_str)
+                        years_to_mat = (mat_dt - datetime.now()).days / 365.25
+                        if years_to_mat > 0:
+                            # Approximate YTM formula:
+                            # YTM ≈ (C + (F-P)/n) / ((F+P)/2)
+                            approx_ytm = round(
+                                (coupon + (face - close) / years_to_mat)
+                                / ((face + close) / 2)
+                                * 100,
+                                2,
+                            )
+                    except (ValueError, TypeError):
+                        pass
+
+                bond = TBondInfo(
+                    symbol=symbol,
+                    tenor=bond_tenor,
+                    coupon_rate=coupon,
+                    coupon_frequency=frequency,
+                    face_value=face,
+                    issue_date=issue_str if issue_str else None,
+                    maturity_date=maturity_str if maturity_str else None,
+                    close_price=close,
+                    approx_ytm=approx_ytm,
+                )
+
+                if self.cache:
+                    await self.cache.set(cache_key, bond, ttl=86400)
+
+                return bond
+            except Exception as e:
+                logger.error("Failed to scrape bond info", symbol=symbol, error=str(e))
+                return None
+
+        # Scrape in batches of 10 to avoid overwhelming the server
+        batch_size = 10
+        for i in range(0, len(symbols), batch_size):
+            batch = symbols[i : i + batch_size]
+            tasks = [_scrape_bond(sym) for sym in batch]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, TBondInfo):
+                    bonds.append(result)
+
+        # Sort by issue date descending (newest first)
+        def _issue_sort_key(b: TBondInfo) -> str:
+            if b.issue_date:
+                try:
+                    from dateutil.parser import parse as dateutil_parse
+
+                    return dateutil_parse(b.issue_date).isoformat()
+                except (ValueError, TypeError):
+                    pass
+            return ""
+
+        bonds.sort(key=_issue_sort_key, reverse=True)
+
+        return bonds

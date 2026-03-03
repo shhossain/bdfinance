@@ -5,13 +5,13 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
 class DividendRecord(BaseModel):
     """Dividend record (cash or bonus)"""
 
     percentage: float
     label: str | None = None
     year: int
+
 
 
 class RightIssueRecord(BaseModel):
@@ -84,7 +84,6 @@ class BasicInformation(BaseModel):
     # Optional summary
     summary: str | None = None
 
-
 class InterimEPS(BaseModel):
     """Interim EPS data for a period"""
 
@@ -93,6 +92,7 @@ class InterimEPS(BaseModel):
     eps_continuing_basic: float | None = None
     eps_continuing_diluted: float | None = None
     market_price: float | None = None
+
 
 
 class InterimFinancialPerformance(BaseModel):
@@ -106,6 +106,7 @@ class InterimFinancialPerformance(BaseModel):
     nine_months: InterimEPS = Field(default_factory=InterimEPS)
     annual: InterimEPS = Field(default_factory=InterimEPS)
 
+        
 
 class PERatioEntry(BaseModel):
     """P/E ratio entry"""
@@ -120,6 +121,7 @@ class PERatios(BaseModel):
 
     unaudited: list[PERatioEntry] = Field(default_factory=list)
     audited: list[PERatioEntry] = Field(default_factory=list)
+
 
 
 class FinancialPerformanceAudited(BaseModel):
@@ -159,6 +161,8 @@ class FinancialPerformanceAudited(BaseModel):
     dividend_type: Literal["Cash", "Bonus"] | None = None
     dividend_yield_percent: float | None = None
 
+        
+
 
 class FinancialPerformance(BaseModel):
     """Financial performance section with audited statements"""
@@ -167,7 +171,7 @@ class FinancialPerformance(BaseModel):
     financial_statement_url: str | None = None
     price_sensitive_info_url: str | None = None
     audited_by: str
-
+        
 
 class ShareholdingEntry(BaseModel):
     """Shareholding entry"""
@@ -258,3 +262,5 @@ class DSECompanyData(BaseModel):
             }
         }
     )
+        
+        
