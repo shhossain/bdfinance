@@ -1,9 +1,24 @@
 [project]
 name = "bdfinance"
-version = "0.1.0"
+version = "0.3.0"
 description = "High-performance async Bangladesh stock market data library with batch processing"
 readme = "README.md"
 requires-python = ">=3.12"
+
+keywords = [
+    "bangladesh stock market",
+    "dse",
+    "bangladesh finance",
+]
+
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent"
+]
+
+
+
 dependencies = [
     "httpx[http2]",
     "beautifulsoup4",
@@ -25,3 +40,6 @@ dev = [
 ]
 
 
+[project.urls]
+Homepage = "https://github.com/shhossain/bdfinance"
+Repository = "https://github.com/shhossain/bdfinance"

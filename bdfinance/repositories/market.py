@@ -119,7 +119,7 @@ class MarketRepository(BaseRepository):
             company_name = data.basic_information.company_name or symbol
             if company_name:
                 try:
-                    summary_text = await self.get_company_summary(company_name)
+                    summary_text = await self.get_company_summary(symbol, company_name)
                     # Update basic_information with summary
                     data.basic_information.summary = summary_text
                 except Exception as e:
